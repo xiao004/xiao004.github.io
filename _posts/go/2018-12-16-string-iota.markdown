@@ -1,10 +1,11 @@
 ---
 layout: post
-title: "string"
+title: "string&iota"
 date: 2018-12-16 14:30
 categories: go
 ---
 
+## string
 go 中的字符串都是采用 UTF-8 字符集编码。字符串是用一对双引号（""）或反引号（``）括起来定义，它的类型是 string
 
 ##### string 类型的声明以及初始化
@@ -79,3 +80,43 @@ func main() {
 	fmt.Println(reflect.TypeOf(str))//输出 string， 即 str 本身还是 string 类型
 }
 ```
+
+## iota
+iota 默认开始值是 0，const enum 中每增加一行加 1. 每遇到一个 const 关键字，iota 就会重置为 0, 同一行的 iota 值相同
+``` go
+package main
+
+import (
+	"fmt"
+)
+
+const (
+	x = iota // x = 0
+	y = iota // y = 1
+	w        // w = 2
+	//常量声明省略值时， 默认和之前一个值的字面相同。 这里隐式地说 w = iota
+	//因此 w = 2。 其实上面 y 可同样不用 "= iota"
+)
+
+const v = iota // 每遇到一个 const 关键字， iota 就会重置， 此时 v = 0
+
+const (
+	h, i, j = iota, iota, iota //h = 0, i = 0, j = 0 iota 在同一行值相同
+)
+
+const (
+	a       = iota //a=0
+	b       = "B"
+	c       = iota             //c=2
+	d, e, f = iota, iota, iota //d=3,e=3,f=3
+	g       = iota             //g = 4
+)
+
+func main() {
+	fmt.Println(x, y, w)             //0 1 2
+	fmt.Println(v)                   //0
+	fmt.Println(h, i, j)             // 0 0 0
+	fmt.Println(a, b, c, d, e, f, g) // 0 B 2 3 3 3 4
+}
+```
+
