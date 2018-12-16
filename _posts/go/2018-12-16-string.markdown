@@ -1,9 +1,9 @@
 ---
 
 layout: post
-title: "string"
-data: 2018-12-16 13:29:00
-categoriges: go
+tite: "string"
+date: 2018-12-16 13:29:00
+categories: go
 
 ---
 
