@@ -39,3 +39,43 @@ var str string = "xxxxx"
 str[0] = 'c' //error cannot assign to str[0]
 ```
 
+##### 可以通过间接方式改变 string 的值
+将字符串 s 转换为 []byte 类型，再转换回 string 类型存储到***另一个*** string 变量中
+``` go
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	str := "xxxx"
+	c := []byte(str)  //先将字符串转化为 []byte 类型
+	c[0] = 'k'        //修改元素值
+	str2 := string(c) //再将 c 转换为 string 类型并存储到变量 str2 中
+	fmt.Println(str2) //输出 kxxx
+}
+```
+
+通过***切片***的方式改变 string 变量的值
+``` go
+package main
+
+import (
+	"fmt"
+	"reflect"
+)
+
+func main() {
+	str := "xxxx"
+
+	//获取 str 的类型
+	fmt.Printf("%T\n", str) //输出 string
+
+	str = str[:1] + "s" + str[2:] //通过切片的形式修改 string 的值
+
+	fmt.Println(str) //输出 xsxx
+	//获取 str 的类型
+	fmt.Println(reflect.TypeOf(str))//输出 string， 即 str 本身还是 string 类型
+}
+```
