@@ -1,0 +1,210 @@
+---
+layout: post
+title:  "func"
+date:   2018-12-17 19:23:32 +0800
+categories: go
+---
+
+***go 函数不接受缺省参数<br>
+go 函数不能重载***<br>
+函数可以返回多个值<br>
+如果没有返回值，那么就直接省略最后的返回信息。如果有返回值， 那么必须在函数的外层添加 return 语句<br>
+
+##### func 声明
+``` go
+func funcName(input1 type1, input2 type2) (output1 type1, output2 type2) {
+    //这里是处理逻辑代码
+    //返回多个值
+    return value1, value2
+}
+```
+
+##### 多个返回值
+``` go
+package main
+
+import (
+	"fmt"
+)
+
+func max_and_min(a, b int) (int, int) {
+	if a > b {
+		return a, b
+	} else {
+		return b, a
+	}
+}
+
+func main() {
+	a, b := 1, 2
+	a, b = max_and_min(a, b)
+	fmt.Println(a, b) //2 1
+}
+```
+
+##### 可变参数
+``` go
+package main
+
+import (
+	"fmt"
+)
+
+func max(arg ...int) int {
+	//在函数体中， 变量 arg 是一个 int 的 slice
+	max := arg[0]
+	for _, x := range arg {
+		if x > max {
+			max = x
+		}
+	}
+	return max
+}
+
+func main() {
+	fmt.Println(max(1, 2, 3, 4, -1)) //4
+}
+
+```
+##### 传值和传指针
+go 语言中没有 c++ 中的引用传递，若要改变同一个对象则需要显示的指针传参(大部分类型)<br>
+go 语言中 channel，slice，map 这三种类型的实现机制类似指针，所以可以直接传递，而不用取地址后传递指针。（注：若函数需改变 slice 的长度，则仍需要取地址传递指针）
+
+##### defer
+defer 语句在函数返回前或者 panic 前执行，多条 defer 语句则以先进后出的顺序执行
+``` go
+package main
+
+import (
+	"fmt"
+)
+
+func gg() {
+	defer fmt.Println("defer") //在函数返回前或者 panic 前执行
+
+	a := "xxx"
+	fmt.Println(a)
+
+}
+
+func aa() {
+	for i := 1; i < 5; i++ {
+		defer fmt.Println(i) //后进先出的顺序执行
+	}
+}
+
+func main() {
+	gg()
+	aa()
+}
+
+//xxx
+//defer
+//4
+//3
+//2
+//1
+```
+
+##### 函数作为值、类型
+**声明函数类型**
+``` go
+type typeName func(input1 inputType1 , input2 inputType2 [, ...]) (result1 resultType1 [, ...])
+```
+
+函数当做值和类型能让程序更加灵活, 减少代码冗余
+``` go
+package main
+
+import (
+	"fmt"
+)
+
+//声明一个函数类型
+type testInt func(int) bool
+
+func isOdd(x int) bool {
+	if x%2 == 0 {
+		return false
+	}
+	return true
+}
+
+func isEven(x int) bool {
+	if x%2 == 0 {
+		return true
+	}
+	return false
+}
+
+func filter(slice []int, t testInt) []int {
+	var result []int
+	for _, v := range slice {
+		if t(v) {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+func main() {
+	a := []int{1, 2, 3, 4, 5, 6}
+	fmt.Println(filter(a, isOdd))  //[1 3 5]
+	fmt.Println(filter(a, isEven)) //[2 4 6]
+}
+```
+
+##### recover 和 panic
+go 不能抛出异常，而是使用了 panic 和 recover 机制。但是 go 语言建议尽量不要使用 panic<br>
+panic 是一个内建函数，可以中断函数原有的控制流程(defer 语句仍然会执行完), 若 panic 在本层函数中没有被 recover 捕获则向上层函数传递，直到遇到 defer 中的 recover ，否则整个进程终止。panic 可以由除 0 等运行错误产生，也可以直接调用<br>
+recover 是一个内建函数，在正常的执行过程中，调用 recover 会返回 nil，且不会产生其他任何效果。而遇到 panic 时调用 recover 则可以捕获到 panic 的输入值，并且恢复正常的执行
+``` go
+package main
+
+import (
+	"fmt"
+)
+
+func div(a, b int) int {
+	defer fmt.Println("aaa")
+
+	ret := a / b // 发生除 0 异常时直接跳到 defer 函数
+	return ret
+}
+
+func done(a, b int) int {
+	defer func() { //必须声明为 defer 才能使用 recover 捕获 panic
+		fmt.Println("---")
+		if err := recover(); err != nil {
+			fmt.Println(err)
+		}
+		fmt.Println("===")
+
+	}()
+
+	defer fmt.Println("xxx")
+
+	cnt := div(a, b)
+	fmt.Printf("++++")
+	return cnt
+}
+
+func main() {
+	done(1, 0)
+}
+
+//aaa
+//xxx
+//---
+//runtime error: integer divide by zero
+//===
+```
+
+##### main 和 init 函数
+go 里面有两个保留的函数: init 函数（能够应用于所有的package）和 main 函数（只能应用于 package main）。这两个函数在定义时不能有任何的参数和返回值。虽然一个 package 里面可以写任意多个 init 函数，但这无论是对于可读性还是以后的可维护性来说，我们都强烈建议用户在一个 package 中每个文件只写一个 init 函数。<br>
+go 程序会自动调用 init() 和 main ()，所以你不需要在任何地方调用这两个函数。每个 package 中的 init 函数都是可选的，但 package main 就必须包含一个 main 函数。<br>
+***程序的初始化流程***<br>
+从 main package 开始，先递归的导入所有的 package，然后从最后一层 package 开始, 同一个 package 下的多个文件按照命名字符串升序进行。同一个文件中按照全局 const 变量，全局普通变量，init 函数，main 函数的顺序进行初始化，若某个环节没有则跳到下一个环节。最后回溯到 main package 中的 main 函数<br>
+如下图:
+
+<img src="/images/go_init.png" width="750" height="300" />
