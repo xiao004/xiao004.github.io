@@ -1,10 +1,11 @@
 ---
 layout: post
-title: "slice"
+title: "slice&map"
 data: 2018-12-17 12:46:00
 categories: go
 ---
 
+## slice
 slice 是一个引用类型，其指向一个底层的数组。slice 是一个只有 3 个字段的数据结构：一个是指向底层数组的指针，一个是 slice 长度，一个是 slice 的容量
 
 ##### slice 的声明和初始化
@@ -83,3 +84,79 @@ func main() {
 }
 ```
 
+## map
+map 是无序的，每次打印出来的 map 顺序不一定一样，它不能通过 index 获取，而必须通过 key 获取<br>
+map 的长度是不固定的，也就是和 slice 一样，也是一种引用类型<br>
+内置的 len 函数同样适用于 map，返回 map 拥有的 key 的数量<br>
+map 的值可以很方便的修改，通过 numbers["one"] = 11 可以很容易的把 key 为 one 的字典值改为 11<br>
+map 和其他基本型别不同，它不是 thread-safe ，在多个 go-routine 存取时，必须使用 mutex lock 机制<br>
+
+##### map 的声明以及初始化
+map 的类型可以是可以是 string 及所有完全定义了 == 与 != 操作的类型<br>
+**map 对象必须要用 make 初始化后才能访问**
+```go
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	// 声明一个 key 是字符串， 值为 int 的字典, 这种方式的声明需要在使用之前使用 make 初始化
+	var nums map[string]int
+	//	nums["xxx"] = 1 // panic: assignment to entry in nil map
+
+	nums = make(map[string]int) //默认初始化为 0(对应 value 类型的 0 值)
+	fmt.Println(nums["xx"])     // 0
+	nums["xxx"] = 12
+	fmt.Println(nums["xxx"]) //12
+
+	//直接用 make 声明并初始化
+	cnt := make(map[string]int) //默认初始化为 0
+	cnt["xxx"] = 11             //初始化后可以进行访问
+
+	gg := cnt["xxx"]
+	ok, value := cnt["xxx"]
+	fmt.Println(ok, value) //11 true
+	fmt.Println(gg)        //11
+
+}
+```
+
+##### map 是引用类型
+如果两个map同时指向一个底层，那么一个改变，另一个也相应的改变<br>
+``` go
+cnt := make(map[string]int)
+cnt["xxx"] = 1
+cnt["ggg"] = 2
+
+gel := cnt
+cnt["xxx"] = -1
+
+//cnt 和 gel 指向同一个底层对象， cnt 的值改变则 gel 也跟着变化
+fmt.Println(cnt) //map[xxx:-1 ggg:2]
+fmt.Println(gel) //map[xxx:-1 ggg:2]
+```
+
+##### delete 操作
+delete 一个不存在的元素则什么也不做， 不会引起异常<br>
+``` go
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	cnt := make(map[string]int)
+	cnt["xxx"] = 1
+	cnt["ggg"] = 2
+
+	delete(cnt, "aaa") //delete 一个不存在的元素则什么也不做， 不会引起异常
+	fmt.Println(cnt)   //map[xxx:1 ggg:2]
+
+	delete(cnt, "xxx")
+	fmt.Println(cnt) //map[ggg:2]
+
+}
+```
