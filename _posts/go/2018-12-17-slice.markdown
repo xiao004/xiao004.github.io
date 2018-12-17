@@ -1,0 +1,85 @@
+---
+layout: post
+title: "slice"
+data: 2018-12-17 12:46:00
+categories: go
+---
+
+slice 是一个引用类型，其指向一个底层的数组。slice 是一个只有 3 个字段的数据结构：一个是指向底层数组的指针，一个是 slice 长度，一个是 slice 的容量
+
+##### slice 的声明和初始化
+**使用 make 声明并初始化 slice**
+``` go
+slice := make([]int, 5, 10)         //声明一个容量为 10， 元素个数为 5 且 5 个元素都初始化为 0 的 slice
+fmt.Println(slice)                  //[0 0 0 0 0] 只能访问已初始化的 5 个元素， 剩余 5 个 int 的容量只有被扩充（appen）了才能被访问
+fmt.Println(len(slice), cap(slice)) //长度和容量分别为 5 10
+
+//make 声明 slice 中指定容量的参数可以省略， 默认容量大小和长度一致
+a := make([]int, 5)
+fmt.Println(len(a), cap(a)) //5 5
+```
+
+**使用字面量创建一个 slice(类似于数组)**
+``` go
+slice := []int{1, 2, 3, 4}          //注意， 没有指定长度创建的是 slice， 指定长度创建的是 array
+fmt.Println(len(slice), cap(slice)) //4, 4
+
+a := []int{5: 1} //指定下标为 5 的元素值为 1
+fmt.Println(a)   //[0 0 0 0 0 1]
+```
+
+**nil slice 和空 slice**<br>
+注意：nil slice 不能 append 元素，也不能用 len, cpa 计算长度和容量
+``` go
+b := []int{}//一个元素集合为空的切片
+fmt.Println(len(b), cap(b)) //0 0
+b = append(b, 1)
+	
+c := []int//一个 nil 切片
+//fmt.Println(len(c), cap(c)) // error type []int is not an expression
+//c = append(c, 1) // error type []int is not an expression
+```
+
+##### slice 是引用类型
+**slice 之间无论是直接用 = 进行赋值操作，还是用 [:] 截取元素的形式进行赋值操作都是引用赋值，即指向同一个底层数组**
+``` go
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	a := make([]int, 4, 6)
+	b := a
+	c := a[0:3]
+	a[0] = -1
+
+	fmt.Println(a) //[-1 0 0 0]
+	fmt.Println(b) //[-1 0 0 0]
+	fmt.Println(c) //[-1 0 0]
+}
+```
+**slice 深拷贝(copy 函数)**<br>
+将第二个 slice 里的元素拷贝到第一个 slice 里，拷贝的长度为两个 slice 中长度较小的长度值(注意是 len 不是 cap)
+``` go
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	a := []int{1, 2, 3}
+	e := make([]int, 10, 10)
+
+	//将第二个 slice 里的元素拷贝到第一个 slice 里，拷贝的长度为两个 slice 中长度较小的长度值(注意是 len 不是 cap)
+	copy(e, a)
+
+	fmt.Println(e) //[1 2 3 0 0 0 0 0 0 0]
+
+	a[0] = -1
+	fmt.Println(e) //[1 2 3 0 0 0 0 0 0 0] a 的值改变后 e 没有改变， copy 是深拷贝
+}
+```
+
