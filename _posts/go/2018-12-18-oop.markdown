@@ -1,0 +1,184 @@
+---
+layout: post
+title: "oop"
+date: 2018-12-18 11:47:00 +0800
+categories: go
+---
+
+##### go 不同文件之间的引用
+同一个包里面，不同文件之间，不需要 import，直接用就好。不同包的话，需要引用包，只能使用大写字母开头的方法 ，变量等等，小写子母开头的只能包内使用。
+
+##### method
+method 是附属在一个给定的类型上的，他的语法和函数的声明语法几乎一样，只是在 func后面增加了一个 receiver (也就是 method 所依从的主体)
+``` go
+package main
+
+import (
+	"fmt"
+	"math"
+)
+
+type Rectangle struct {
+	width, height float64
+}
+
+type Circle struct {
+	r float64
+}
+
+func (r Rectangle) area() float64 {
+	r.height += 1
+	return r.height * r.width
+}
+
+func (c Circle) area() float64 {
+	return c.r * c.r * math.Pi
+}
+
+func main() {
+	x := Rectangle{1.0, 2.0}
+
+	y := Circle{1.0}
+
+	fmt.Println(x.area()) //2
+	fmt.Println(y.area()) //3.141592653589793
+
+	//注意， 在 Rectangle 的 area method 中给 height 属性加一， 但是 x.height 仍然是原来的值， 说明这里的 Receiver 是值传递的
+	fmt.Println(x.height) //2
+}
+```
+
+**注意**<br>
+虽然 method 的名字一模一样，但是如果接收者不一样，那么method就不一样<br>
+method 里面可以访问接收者的字段, 但是若不显式声明 Receiver 为指针的话，则为值传递，method 中的行为不会影响调用 method 的对象成员的值
+
+##### 指针作为 receiver
+``` go
+package main
+
+import (
+	"fmt"
+	"math"
+)
+
+type Rectangle struct {
+	width, height float64
+}
+
+type Circle struct {
+	r float64
+}
+
+func (r *Rectangle) area() float64 {
+	// go 语言可以自动解一层引用， 所以这里既可以用 r.height += 1 又可以用 (*r).height += 1 其他语句同理
+	r.height += 1
+	return r.height * r.width
+}
+
+func (c *Circle) area() float64 {
+	c.r -= 1
+	return c.r * c.r * math.Pi
+}
+
+func main() {
+	x := Rectangle{1.0, 2.0}
+
+	y := Circle{1.0}
+
+	// go 语言可以自动加一层 &， 所以这里既可以用 x.area() 调用又可以 (&x).area() 调用， 其他语句同理
+	fmt.Println(x.area()) //3
+	fmt.Println(y.area()) //0
+
+	// receiver 传的指针, 所以 x.height 和 y.r 都被改变了
+	fmt.Println(x.height) //3
+	fmt.Println(y.r)      //0
+}
+```
+**注意**<br>
+go 语言可以自动进行一层的引用或者解引用转换，既，如果一个 method 的 receiver 是 *T, 你可以在一个 T 类型的实例变量 V 上面调用这个 method，而不需要 &V 去调用这个 method。也可以在这个 method 内直接用 receiver.x 访问变量 V 的 x 成员，而不需要 (*receiver).x 去访问 V 的 x 成员<br>
+receiver 只能是单层指针，不能是双指针或者多层指针，也不能是一个指针类型变量的指针<br>
+
+##### method 继承
+method 是可以继承的。如果匿名字段实现了一个 method，那么包含这个***匿名字段***的 struct 也能调用该 method<br>
+``` go
+package main
+
+import (
+	"fmt"
+)
+
+type Human struct {
+	name  string
+	age   int
+	phone string
+}
+
+type student struct {
+	h      Human
+	school string
+}
+
+type Employee struct {
+	Human   //匿名字段
+	company string
+}
+
+func (h *Human) sayHi() {
+	fmt.Println("hello world")
+}
+
+func main() {
+	a := Human{"yuan", 18, "123"}
+	b := student{a, "jxust"}
+	c := Employee{a, "baidu"}
+
+	a.sayHi() //hello world
+
+	//  struct 只能继承匿名字段的 method
+	//	b.sayHi() //b.sayHi undefined (type student has no field or method sayHi)
+
+	//对于非匿名的字段可以通过字段间接访问 method
+	b.h.sayHi() //hello world
+
+	c.sayHi() //hello world
+}
+```
+**注意**<br>
+struct 只能继承匿名字段的 method, 对于非匿名的字段可以通过字段间接访问 method
+
+##### method 重写
+上面的例子中，如果 student 想要实现自己的 SayHi, 怎么办？简单，和匿名字段冲突一样的道理，我们可以在 student 上面定义一个 method，重写了匿名字段的方法
+``` go
+package main
+
+import (
+	"fmt"
+)
+
+type Human struct {
+	name  string
+	age   int
+	phone string
+}
+
+type student struct {
+	h      Human
+	school string
+}
+
+func (h *Human) sayHi() {
+	fmt.Println("hello world")
+}
+
+func (s *student) sayHi() {
+	fmt.Println("hi, i am a student")
+}
+
+func main() {
+	a := Human{"yuan", 18, "123"}
+	b := student{a, "jxust"}
+
+	a.sayHi() //hello world
+	b.sayHi() //hi, i am a student
+}
+```
