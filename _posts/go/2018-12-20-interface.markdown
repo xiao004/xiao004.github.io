@@ -5,7 +5,8 @@ date: 2018-12-20 13:10:00 +0800
 categories: go
 ---
 
-interface 类型定义了一组方法，如果某个对象实现了某个接口的所有方法(实现 interface 中的一个 method 即函数名，形参类型，个数，顺序，返回参数类型，个数，顺序对应)，则此对象就实现了此接口。interface 可以被任意的对象实现。一个对象可以实现任意多个 interface
+interface 类型定义了一组方法，如果某个对象实现了某个接口的所有方法(实现 interface 中的一个 method 即函数名，形参类型，个数，顺序，返回参数类型，个数，顺序对应)，则此对象就实现了此接口。interface 可以被任意的对象实现。一个对象可以实现任意多个 interface<br>
+类似于 struct 继承匿名字段的 method，如果一个 interface1 作为 interface2 的一个嵌入字段，那么 interface2 隐式的包含了 interface1 里面的 method
 
 ##### interface 的声明及实现
 ``` go
@@ -102,3 +103,114 @@ func main() {
 继承自匿名字段的 method 可以被覆盖<br>
 如果我们定义了一个 interface 的变量，那么这个变量里面可以存实现这个 interface 的任意类型的对象。由这些特性可知，***go 可以实现类似于 c++ 中的多态***<br>
 
+##### 空 interface
+空 interface (interface{}) 不包含任何的 method，正因为如此，所有的类型都实现了空 interface。因此它可以存储任意类型的对象
+``` go
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	var a interface{}
+	var i int = 5
+	s := "hello"
+
+	a = i
+	fmt.Println(a) //5
+
+	a = s
+	fmt.Println(s) //hello
+}
+```
+
+##### interface 变量存储的类型
+由前面的内容可知 interface 类型的变量可以存储任意实现了该 interface method 集合的对象，那么如何判断一个 interface 变量中的对象类型是什么呢？<br>
+***Comma-ok 断言***<br>
+value, ok = element.(T)，这里的 value 就是变量的值，ok 是一个 bool 类型，T 是断言的类型。如果 element 里面确实存储了 T 类型的数值，那么 ok 返回 true，否则返回 false。<br>
+``` go
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+type Element interface{}
+type List []Element
+
+type Person struct {
+	name string
+	age  int
+}
+
+func (p Person) String() string {
+	return "[name:" + p.name + " age:" + strconv.Itoa(p.age) + "]"
+}
+
+func main() {
+	list := make(List, 3)
+	list[0] = 1
+	list[1] = "hello"
+	list[2] = Person{"Dennis", 70}
+
+	for index, element := range list {
+		if value, ok := element.(int); ok {
+			fmt.Println("index:", index, "value:", value, "type:int")
+		} else if value, ok := element.(string); ok {
+			fmt.Println("index:", index, "value:", value, "type:sting")
+		} else if value, ok := element.(Person); ok {
+			fmt.Println("index:", index, "value:", value, "type:Person")
+		}
+	}
+}
+
+//index: 0 value: 1 type:int
+//index: 1 value: hello type:sting
+//index: 2 value: [name:Dennis age:70] type:Person
+```
+
+***switch测试***<br>
+``` go
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+type Element interface{}
+type List []Element
+
+type Person struct {
+	name string
+	age  int
+}
+
+func (p Person) String() string {
+	return "[name:" + p.name + " age:" + strconv.Itoa(p.age) + "]"
+}
+
+func main() {
+	list := make(List, 3)
+	list[0] = 1
+	list[1] = "hello"
+	list[2] = Person{"Dennis", 70}
+
+	for index, element := range list {
+		switch value := element.(type) {
+		case int:
+			fmt.Println("index:", index, "value:", value, "type:int")
+		case string:
+			fmt.Println("index:", index, "value:", value, "type:string")
+		case Person:
+			fmt.Println("index:", index, "value:", value, "type:Person")
+		}
+	}
+}
+
+//index: 0 value: 1 type:int
+//index: 1 value: hello type:sting
+//index: 2 value: [name:Dennis age:70] type:Person
+```
