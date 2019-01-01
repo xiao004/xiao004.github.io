@@ -213,7 +213,7 @@ func main() {
 
 ##### 总结 go web server 执行流程
 1. 首先调用 Http.HandleFunc<br>
-a.调用了 DefaultServeMux 的 HandleFunc<br>
+a.调用了 DefaultServeMux(**ServerMux 的一个实例**) 的 HandleFunc<br>
 b.调用了 DefaultServeMux 的 Handle<br>
 c.往 DefaultServeMux 的 map[string]muxEntry 中增加对应的 handler 和路由规则<br>
 2. 其次调用http.ListenAndServe(":9090", nil)<br>
@@ -226,5 +226,8 @@ f.读取每个请求的内容 w, err := c.readRequest()<br>
 g.判断 handler 是否为空，如果没有设置 handler（这个例子就没有设置 handler），handler 就设置为 DefaultServeMux<br>
 h.调用 handler 的 ServeHttp<br>
 i.在这个例子中，下面就进入到 DefaultServeMux.ServeHttp<br>
-j.根据 request 中的路径选择 handler，并且进入到这个 handler 的 ServeHTTP // 这里的 handler 和 g 中的 handler 不是指同一个东西，g 中的 handler 对应的是 http.ListenAndServer 的第二个参数或 ServerMux 类型对象，这里的 handler 指的是 muxEntry 对象中的 handler 成员，里面存储的逻辑函数。因为他们都实现了 handler 接口，此处要注意区分<br>
+j.根据 request 中的路径选择 handler，并且进入到这个 handler 的 ServeHTTP // 这里的 handler 和 g 中的 handler 不是指同一个东西，g 中的 handler 对应的是 server 结构里面的 handler 成员，这里的 handler 指的是 muxEntry 对象中的 handler 成员，里面存储的逻辑**函数**。因为他们都实现了 handler 接口，此处要注意区分<br>
 k.调用对应的逻辑函数<br>
+
+##### 总结 go web server 流程图
+<img src="https://upload-images.jianshu.io/upload_images/11043-b203aff690e35cfc.png"/>
