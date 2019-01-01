@@ -1,0 +1,230 @@
+---
+layout: post
+title: "web based"
+date: 2018-12-31 19:10:00 +0800
+categories: go
+---
+
+##### 用 http 包建立一个简单的 http 服务器
+go 能直接监听端口，不需要像 php 语言那样需要 nginx 或 apache 服务器。并且由于 go 语言的特性，下面这个 web server 已经支持并发了
+``` go
+package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+	"strings"
+)
+
+func done(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm() //解析参数，默认是不解析的
+
+	fmt.Println(r.Form) //在服务端输出一些访问者的信息
+	fmt.Println("path", r.URL.Path)
+	fmt.Println("scheme", r.URL.Scheme)
+	fmt.Println(r.Form["url_long"])
+
+	//获取 url 的参数和值
+	for k, v := range r.Form {
+		fmt.Println("[key:", k, " value:", strings.Join(v, ""))
+	}
+
+	//写入 w 是输出到客户端的信息
+	fmt.Fprintf(w, "hello world")
+}
+
+func main() {
+	http.HandleFunc("/", done) //设置访问的路由
+
+	err := http.ListenAndServe(":8890", nil) //设置监听的端口
+
+	if err != nil {
+		log.Fatal("ListenAndServer: ", err)
+	}
+}
+```
+
+##### 分析 http 包运行机制
+**http 执行流程**
+1. 创建 Listen Socket，监听指定的端口，等待客户端请求<br>
+结合前面的代码，显然监听端口是在 http.ListenAndServer 中完成的。其底层实现是：初始化一个 server 对象，然后调用 net.Listen("tcp", addr)，即底层用 tcp 协议搭建了一个服务，然后监控设置的端口
+2. Listen Socket 接受客户端的请求，得到 Client Socket，接下来通过 Client Socket 和客户端通信<br>
+继 1 中监控端口之后，调用 srv.Server(net.Listener)//实现见下面代码。该函数中先通过 Listener 接收请求信息(Listen Socket 部分)，然后创建一个 Conn，接着单独开一个 goroutine，go conn.server(即 Client Socket)，把接收的请求数据扔给这个 conn 去服务。**即用户的每个请求都是在一个新的 goroutine 中处理的，互相不影响。可以支持并发**
+3. 处理客户端请求，首先从 Client Socket 读取请求数据，然后交给对应的 handle 处理，handle 处理完毕准备后客户端需要的数据，通过 Client socket 写给客户端<br>
+conn 首先会解析 request: c.readRequest，然后获取 handle: handle := c.server.Handler，即 http.ListenAndServer 的第二个参数(我们前面代码中传的是 nil)，若为空则取默认值 DefultServeMux，即 http.HandleFunc("/", sayhalloName)。DefultServeMux 会调用 ServerHTTP 方法，该方法内部会调用当前路由对应的逻辑方法，这里是 sayhalloName，最后通过写入 response 的信息反馈到客户端<br>
+
+**http 包执行流程图**<br>
+<img src="/images/go_web.png" width="510" height="510" />
+
+server.server 代码
+``` go
+func (srv *Server) Serve(l net.Listener) error {
+    defer l.Close()
+    var tempDelay time.Duration // how long to sleep on accept failure
+    for {
+        rw, e := l.Accept()
+        if e != nil {
+            if ne, ok := e.(net.Error); ok && ne.Temporary() {
+                if tempDelay == 0 {
+                    tempDelay = 5 * time.Millisecond
+                } else {
+                    tempDelay *= 2
+                }
+                if max := 1 * time.Second; tempDelay > max {
+                    tempDelay = max
+                }
+                log.Printf("http: Accept error: %v; retrying in %v", e, tempDelay)
+                time.Sleep(tempDelay)
+                continue
+            }
+            return e
+        }
+        tempDelay = 0
+        c, err := srv.newConn(rw)
+        if err != nil {
+            continue
+        }
+        go c.serve()
+    }
+}
+```
+
+##### 路由的具体实现
+**ServeMux**
+``` go
+type ServeMux struct {
+    mu sync.RWMutex   //锁，由于请求涉及到并发处理，go 里面的 map 是非线程安全的，因此这里需要一个锁机制
+    m  map[string]muxEntry  // 路由规则，一个string对应一个mux实体，这里的string就是注册的路由表达式
+    hosts bool // 是否在任意的规则中带有host信息
+}
+```
+**muxEntry**
+``` go
+type muxEntry struct {
+    explicit bool   // 是否精确匹配
+    h        Handler // 这个路由表达式对应哪个handler
+    pattern  string  //匹配字符串
+}
+```
+**Handler**
+``` go
+type Handler interface {
+    ServeHTTP(ResponseWriter, *Request)  // 路由实现器
+}
+```
+
+前面的 web server 代码中 http.HandleFunc("/", sayHelloName) 语句的最终目标就是将 sayHelloName 和 "/" 这条路由映射规则存到 ServerMux 中的 muxEntry 对象中。这里存在一个问题，sayHelloName 没有实现 Handle 接口，怎么能存到 muxEntry 中？实际上 http 包中的 HandleFunc 类型实现了 Handle 接口(实现 ServerHttp 方法)。所以在调用 HandleFunc 方法后先转换成了 HandleFunc 类型，这样就拥有了 ServerHttp 方法
+``` go
+type HandlerFunc func(ResponseWriter, *Request)
+
+// ServeHTTP calls f(w, r).
+func (f HandlerFunc) ServeHTTP(w ResponseWriter, r *Request) {
+    f(w, r)
+}
+```
+
+**分发请求**<br>
+默认的路由器实现了 ServeHTTP
+``` go
+func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request) {
+    if r.RequestURI == "*" {
+        w.Header().Set("Connection", "close")
+        w.WriteHeader(StatusBadRequest)
+        return
+    }
+    h, _ := mux.Handler(r)
+    h.ServeHTTP(w, r)
+}
+```
+
+mux.Handler(r)
+``` go
+func (mux *ServeMux) Handler(r *Request) (h Handler, pattern string) {
+    if r.Method != "CONNECT" {
+        if p := cleanPath(r.URL.Path); p != r.URL.Path {
+            _, pattern = mux.handler(r.Host, p)
+            return RedirectHandler(p, StatusMovedPermanently), pattern
+        }
+    }    
+    return mux.handler(r.Host, r.URL.Path)
+}
+```
+
+mux.handler(r.Host, r.URL.Path)
+``` go
+func (mux *ServeMux) handler(host, path string) (h Handler, pattern string) {
+    mux.mu.RLock()
+    defer mux.mu.RUnlock()
+
+    // Host-specific pattern takes precedence over generic ones
+    if mux.hosts {
+        h, pattern = mux.match(host + path)
+    }
+    if h == nil {
+        h, pattern = mux.match(path)
+    }
+    if h == nil {
+        h, pattern = NotFoundHandler(), ""
+    }
+    return
+}
+```
+
+##### 实现一个简易的路由器
+go 支持外部路由，http.ListenAndServer 的第二个参数，它是一个 Handler 接口，我们可以自定义一个类型，给它实现 Handler 接口，在 Handler 接口中实现自定义路由功能
+``` go
+package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+)
+
+type MyMux struct {
+}
+
+func (p *MyMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/" {
+		done(w, r)
+		return
+	}
+
+	http.NotFound(w, r)
+	return
+}
+
+func done(w http.ResponseWriter, r *http.Request) {
+	//写入 w 是输出到客户端的信息
+	fmt.Fprintf(w, "hello world")
+}
+
+func main() {
+	mux := &MyMux{}
+
+	err := http.ListenAndServe(":8890", mux) //设置监听的端口和路由
+
+	if err != nil {
+		log.Fatal("ListenAndServer: ", err)
+	}
+}
+```
+
+##### 总结 go web server 执行流程
+1. 首先调用 Http.HandleFunc<br>
+a.调用了 DefaultServeMux 的 HandleFunc<br>
+b.调用了 DefaultServeMux 的 Handle<br>
+c.往 DefaultServeMux 的 map[string]muxEntry 中增加对应的 handler 和路由规则<br>
+2. 其次调用http.ListenAndServe(":9090", nil)<br>
+a.实例化 Server<br>
+b.调用 Server 的 ListenAndServe()<br>
+c.调用 net.Listen("tcp", addr) 监听端口<br>
+d.启动一个 for 循环，在循环体中 Accept 请求<br>
+e.对每个请求实例化一个 Conn，并且开启一个 goroutine 为这个请求进行服务 go c.serve()<br>
+f.读取每个请求的内容 w, err := c.readRequest()<br>
+g.判断 handler 是否为空，如果没有设置 handler（这个例子就没有设置 handler），handler 就设置为 DefaultServeMux<br>
+h.调用 handler 的 ServeHttp<br>
+i.在这个例子中，下面就进入到 DefaultServeMux.ServeHttp<br>
+j.根据 request 中的路径选择 handler，并且进入到这个 handler 的 ServeHTTP // 这里的 handler 和 g 中的 handler 不是指同一个东西，g 中的 handler 对应的是 http.ListenAndServer 的第二个参数或 ServerMux 类型对象，这里的 handler 指的是 muxEntry 对象中的 handler 成员，里面存储的逻辑函数。因为他们都实现了 handler 接口，此处要注意区分<br>
+k.调用对应的逻辑函数<br>
