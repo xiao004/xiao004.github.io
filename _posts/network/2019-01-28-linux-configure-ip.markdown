@@ -55,17 +55,12 @@ iface lo inet loopback
 auto enp1s0 enp1s0:0 enp1s0:1
 iface enp1s0 inet static
     address 192.168.43.87
-    network 192.168.43.0
     netmask 255.255.255.0
-    broadcast 192.168.43.255
-    gateway 192.168.43.1
 iface enp1s0:0 inet static
     address 11.11.11.11
-    network 11.11.11.0
     netmask 255.255.255.0
 iface enp1s0:1 inet static
     address 99.99.99.99
-    network 99.99.99.0
     netmask 255.255.255.0
 ```
 
