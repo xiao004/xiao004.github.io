@@ -1,0 +1,76 @@
+---
+layout: post
+title: 配置多 ip 时源 ip 选择
+date: 2019-01-30 14:00:00 +0800
+categories: network
+---
+
+如果一个主机绑定多个 ip 地址(多网卡或虚拟网卡)，ip 报的源 ip 选择哪个呢？
+
+##### 被动响应
+主机在接受外部数据包，并发送响应数据包时，响应源 ip 显然是客户端请求的目的 ip
+
+##### 主动请求
+当主机对外主动发起请求时，数据报的源 ip 选择必须正确，否则无法接受到对端的响应
+
+每个网卡(物理网卡或虚拟网卡，下文中的网卡都指物理网卡或者虚拟网卡)对应一个 ip，其中有一个主 ip。路由表中每个网卡 ip 有一个 src 属性。选择源 ip 过程有两步，一是选择网卡，二是将网卡对应的 src 填入源 ip
+
+**网卡选择**<br>
+ipv6 选择第一个绑定可用 ip 的网卡。ipv4 尽量选择绑定的 ip 和 ip 报目标 ip 处于同一子网的网卡。如果所有网卡绑定的 ip 都和目标 ip 不属于同一子网，则使用绑定主 ip 的网卡
+
+**ip 报源 ip 选择**<br>
+如果网卡 ip 和主 ip 处于同一子网，则其路由表的 src 属性为主 ip。若网卡 ip 和主 ip 不在同一网段，则其对应路由表的 src 属性就是该网卡 ip 本身。ip 报源 ip 为该 ip 报选择的网卡对应的 src 值
+
+另外，应用程序可以通过 bind(2) 系统调用，应用至 sendmsg(2) 调用上，并通过辅助数据对象 IP_PKTINFO，从而显式指定源 ip
+
+**网卡 ip 配置**<br>
+本机有 enp1s0 和 wlp2s0 两块物理网卡，其中 wlp2s0 为主网卡。给 enp1s0 配置 3 个 ip——192.168.43.88/24、11.11.11.11/8、183.232.231.66/16，其中后两个 ip 对应虚拟网卡 enp1s0:0 和 enp1s0:1。wlp2s0 通过 dhcp 自动获取 ip——192.168.43.87/24
+
+[linux configure ip](https://xiao004.github.io/network/2019/01/28/linux-configure-ip.html)
+
+通过 ip route 命令观察当前路由规则
+
+主 ip 192.168.43.87 的 src 默认就是本身，网卡 enp1s0 中和主 ip 同一网段的 ip 182.168.43.88 的 src 默认值为主 ip。其它 ip 的 src 默认值为本身
+
+<img src="/images/ip-route-1.png" width="480" height="90" />
+
+
+enp1s0:1 网卡中的 ip 183.232.231.66 和 www.baidu.com 的 ip 处于同一网段。所以主动向 www.baidu.com 发送报文时 ip 报会选择绑定 183.232.231.66 的 enp1s0:1 网卡出口，其 src 值为 183.232.231.66，即源 ip 为 183.232.231.66。同理，若主动向 11.11.11.3 发送数据则 ip 报的源 ip 为同一网段的 11.11.11.11
+
+<img src="/images/ip-route-2.png" width="480" height="190" />
+
+因为没有给对应网卡配制网关，无法找到路由，所以无法 ping 通
+
+
+##### 多 ip 指定出口 ip
+**修改路由表网 src 属性**
+
+由前面分析可知，只要修改了对应网卡的 src 属性，那么 ip 报的源 ip 就会随之改变
+
+将 enp1s0:1 网卡的 src 属性修改为 192.168.43.87
+``` bash
+sudo ip route change dev enp1s0 183.232.0.0/16 src 192.168.43.87
+```
+
+用 ip route 命令查看修改后的结果
+
+<img src="/images/ip-route-4.png" width="480" height="100" />
+
+ping 一下 www.baidu.com，源 ip 变成了 192.168.43.87
+
+<img src="/images/ip-route-5.png" width="480" height="90" />
+
+**用 iptables 的 SNAT 策略 修改源 ip**
+``` bash
+iptables -t nat -I POSTROUTING -o enp1s0 -d 0.0.0.0/0 -s 11.11.11.11 -j SNAT --to-source 192.168.0.22
+
+其中 -t nat 指定 nat 表
+-I POSTROUTING 表在 POSTROUTING 链的头部插入一条新规则
+-o enp1s0 表匹配从物理网卡 enps0 流出的流量
+-d 0.0.0.0/0 表匹配任意 ip
+-s 11.11.11.11 表匹配源地址 11.11.11.11
+-j 后面接动作
+--to-source 192.168.43.87 表将前面匹配到的 ip 报源 ip 替换为 192.168.43.87
+
+综合表述即将从 enp1s0 网卡流出的源 ip 为 11.11.11.11 的数据报的源 ip 替换为 192.168.43.87
+```
