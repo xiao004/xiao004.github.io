@@ -1,0 +1,77 @@
+---
+layout: post
+title: "LRU go language implementation"
+date: 2020-05-25 14:30
+categories: algorithm
+---
+
+LRU 算法：
+
+获取数据 get(key) - 如果密钥 (key) 存在于缓存中，则获取密钥的值（总是正数），否则返回 -1
+
+写入数据 put(key, value) - 如果密钥已经存在，则变更其数据值；如果密钥不存在，则插入该组「密钥/数据值」。当缓存容量达到上限时，它应该在写入新数据之前删除最久未使用的数据值，从而为新的数据值留出空间
+
+```
+type LRUCache struct {
+    list *list.List
+    tag map[int]*list.Element
+    capacity int
+}
+
+type Item struct {
+    key int
+    value int
+}
+
+func Constructor(capacity int) LRUCache {
+    return LRUCache {
+        list.New(),
+        make(map[int]*list.Element),
+        capacity,
+    }
+}
+
+
+func (this *LRUCache) Get(key int) int {
+    value := -1
+    // 命中，将当前元素移到list首部，且返回改key对应的value
+    if this.tag[key] != nil {
+        element := this.tag[key]
+        value = element.Value.(Item).value
+        this.list.Remove(element)
+        element = this.list.PushFront(Item{key, value})
+        // 元素移位后更新tag
+        this.tag[key] = element
+    }
+    return value
+}
+
+
+func (this *LRUCache) Put(key int, value int)  {
+    // 如果key已经存在，则删除原值，在首部插入新值
+    if this.tag[key] != nil {
+        element := this.tag[key]
+        this.list.Remove(element)
+        element = this.list.PushFront(Item{key, value})
+        this.tag[key] = element
+
+    } else {
+        // 如果key不存在，则插入新值。先判断是否将要达到上限
+        if this.list.Len() >= this.capacity {
+            element := this.list.Back()
+            this.tag[element.Value.(Item).key] = nil
+            this.list.Remove(element)
+        }
+        element := this.list.PushFront(Item{key, value})
+        this.tag[key] = element
+    }
+}
+
+
+/**
+ * Your LRUCache object will be instantiated and called as such:
+ * obj := Constructor(capacity);
+ * param_1 := obj.Get(key);
+ * obj.Put(key,value);
+ */
+```
