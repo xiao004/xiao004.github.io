@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "CIDR ip to range"
-date: 2020-06-13 20:05:00 +0800
+date: 2020-07-12 20:05:00 +0800
 categories: python
 ---
 将CIDR类型ip转换为range
@@ -65,7 +65,9 @@ if __name__ == '__main__':
 ```
 
 
-##### python2.6版本下的实现——python2.6版本下不能使用netaddr库
+##### python2.6版本下的实现
+
+python2.6版本下不能使用netaddr库, github 上也没找到相关实现，自己撸了一个
 
 ``` python
 # -*- coding: UTF-8 -*-
