@@ -174,3 +174,174 @@ if __name__ == '__main__':
     test_convert_ipv6_cidr_to_range()
 ```
 
+#### 上面那个实现要依赖ipaddress库，并且不是很优雅(主要是依赖ipaddress库但是线上环境不允许)。再撸一个
+```
+# -*- coding: UTF-8 -*-
+
+import socket
+from binascii import hexlify
+
+
+def convert_ipv6_to_int(ipv6_addr):
+    """
+    convert_ipv6_to_int: 将:分字符串形式的ipv6地址转换为10进制形式的ipv6地址
+    :param ipv6_addr ipv6 address, string
+    :return error, integer ipv6 address
+    """
+    try:
+        addr = socket.inet_pton(socket.AF_INET6, ipv6_addr)
+    except Exception as e:
+        return e, -1
+    return None, int(hexlify(addr), 16)
+
+
+def convert_int_to_ipv6(ipv6_int):
+    """
+    convert_int_to_ipv6: 将10进制格式的ipv6地址转换为explode小写字符串格式的ipv6地址
+    :param ipv6_int 10进制数字格式的ipv6地址
+    :return [error, ipv6_addr] 注意：ipv6_addr为explode小写字符串格式的ipv6地址
+    """
+    ipv6_addr = ''
+    index = 0
+    while ipv6_int > 0:
+        index += 1
+        ipv6_addr = hex(ipv6_int % 16)[2] + ipv6_addr
+        ipv6_int = ipv6_int >> 4
+        if (index % 4 == 0) and (index != 32):
+            ipv6_addr = ':' + ipv6_addr
+
+    while index < 32:
+        index += 1
+        ipv6_addr = '0' + ipv6_addr
+        if (index % 4 == 0) and (index != 32):
+            ipv6_addr = ':' + ipv6_addr
+
+    return None, ipv6_addr
+
+
+def convert_ipv6_to_compressed(ipv6_addr):
+    """
+    convert_ipv6_to_compressed: ipv6 0 位压缩
+    :param ipv6_addr string ipv6地址
+    :return error, addr——compress大写格式ipv6地址
+    """
+    error, ipv6_addr_int = convert_ipv6_to_int(ipv6_addr)
+    if error is not None:
+        return error, None
+
+    error, ipv6_addr_explod = convert_int_to_ipv6(ipv6_addr_int)
+    if error is not None:
+        return error, None
+
+    hextets = ipv6_addr_explod.split(":")
+
+    # 记录hextets中最长全0子数组开始下标
+    best_doublecolon_start = -1
+    # 记录hextets中最长全0子数组长度
+    best_doublecolon_len = 0
+    # 记录当前全0子数组开始下标
+    doublecolon_start = -1
+    # 记录当前全0子数组当前长度
+    doublecolon_len = 0
+    for index, hextet in enumerate(hextets):
+        zero_index = 0
+        while zero_index < min(3, len(hextet) - 1) and hextet[zero_index] == '0':
+            zero_index += 1
+
+        if zero_index > 0:
+            hextets[index] = hextet[zero_index:]
+
+        if hextets[index] == '0':
+            doublecolon_len += 1
+            if doublecolon_start == -1:
+                doublecolon_start = index
+
+            if doublecolon_len > best_doublecolon_len:
+                best_doublecolon_len = doublecolon_len
+                best_doublecolon_start = doublecolon_start
+        else:
+            doublecolon_len = 0
+            doublecolon_start = -1
+
+    if best_doublecolon_len > 1:
+        best_doublecolon_end = (best_doublecolon_start +
+                                best_doublecolon_len)
+
+        if best_doublecolon_end == len(hextets):
+            hextets += ['']
+        hextets[best_doublecolon_start:best_doublecolon_end] = ['']
+
+        if best_doublecolon_start == 0:
+            hextets = [''] + hextets
+
+    return None, ':'.join(hextets).upper()
+
+
+def convert_ipv6_cidr_to_range(addr):
+    """
+    convert_ipv6_mask_to_range: 将cidr形式的ipv6地址转换为区间形式的ipv6地址
+    [d800:000f::000f/32] --- return true(function call succeeded) "D800:F::", "D800:F:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF"
+    :param addr
+    :return error, start_ip, end_ip
+    """
+    ipv6_and_netmask_arr = addr.split("/")
+    ipv6_addr = ipv6_and_netmask_arr[0]
+    mask = int(ipv6_and_netmask_arr[1])
+
+    error, ipv6_addr_int = convert_ipv6_to_int(ipv6_addr)
+    if error is not None:
+        return "illegal ipv6 cidr: %s, err: illegal ipv6_addr, %s" % (addr, error), '', ''
+
+    if (mask < 0) or (mask > 128):
+        return "illegal ipv6 cidr: %s, err: illegal mask" % addr, '', ''
+
+    host_mask = 128 - mask
+    start_ip_int = (ipv6_addr_int >> host_mask) << host_mask
+    end_ip_int = ipv6_addr_int >> host_mask
+
+    while host_mask > 0:
+        end_ip_int = (end_ip_int << 1) + 1
+        host_mask -= 1
+
+    return None, convert_ipv6_to_compressed(convert_int_to_ipv6(start_ip_int)[1])[1], convert_ipv6_to_compressed(
+        convert_int_to_ipv6(end_ip_int)[1])[1]
+
+
+def test_convert_ipv6_cidr_to_range():
+    """
+    test_convert_ipv6_mask_to_range: 测试函数 convert_ipv6_mask_to_range
+    """
+    test_cases = [
+        ["2001:db8:abcd:0012::0/0", "::", "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"],
+        ["2001:db8:abcd:0012::0/64", "2001:db8:abcd:12::", "2001:db8:abcd:12:ffff:ffff:ffff:ffff"],
+        ["f000::000f/2", "c000::", "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"],
+        ["c000::000f/1", "8000::", "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"],
+        ["c000::000f/3", "c000::", "dfff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"],
+        ["c000::000f/4", "c000::", "cfff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"],
+        ["d000::000f/16", "d000::", "d000:ffff:ffff:ffff:ffff:ffff:ffff:ffff"],
+        ["d000:8000::000f/17", "d000:8000::", "d000:ffff:ffff:ffff:ffff:ffff:ffff:ffff"],
+        ["d000:7000::000f/17", "d000::", "d000:7fff:ffff:ffff:ffff:ffff:ffff:ffff"],
+        ["d000:7000::000f/18", "d000:4000::", "d000:7fff:ffff:ffff:ffff:ffff:ffff:ffff"],
+        ["d000:7000::000f/19", "d000:6000::", "d000:7fff:ffff:ffff:ffff:ffff:ffff:ffff"],
+        ["d800:7000::000f/7", "d800::", "d9ff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"],
+        ["d800:7000::000f/128", "d800:7000::f", "d800:7000::f"],
+        ["d800:7000::000f/127", "d800:7000::e", "d800:7000::f"],
+        ["d800:7000::000f/125", "d800:7000::8", "d800:7000::f"],
+        ["d800:000f::000f/32", "d800:f::", "d800:f:ffff:ffff:ffff:ffff:ffff:ffff"],
+    ]
+    for test_case in test_cases:
+        net_addr = test_case[0]
+        start_ip_target = test_case[1].upper()
+        end_ip_target = test_case[2].upper()
+
+        _, start_ip, end_ip = convert_ipv6_cidr_to_range(net_addr)
+        if (start_ip_target != start_ip) or (end_ip_target != end_ip):
+            print("convert_ipv6_mask_to_range result error. net_addr: %s, "
+                  "(start_ip: %s, end_ip: %s) (start_ip_target: %s, end_ip_target: %s)" %
+                  (net_addr, start_ip, end_ip, start_ip_target, end_ip_target))
+
+
+if __name__ == '__main__':
+    test_convert_ipv6_cidr_to_range()
+```
+
