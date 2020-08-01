@@ -7,7 +7,7 @@ categories: algorithm
 
 leetcode题目链接：https://leetcode-cn.com/problems/best-position-for-a-service-centre/
 
-题解：可以三分或者梯度下降，三分的注意精度就好了，这里就不写三分了。官方题解![gradient-descent-min](/images/gradient-descent-min.png.png)
+题解：这是一个凸函数，服务中心到客户的欧几里得距离之和随着 x 增大先减小后增大(固定 y 不变)，随着 y 增大先减小后增大(固定 x 不变)。可以三分或者梯度下降，三分的注意精度就好了，这里就不写三分了。官方题解![gradient-descent-min](/images/gradient-descent-min.png.png)
 
 
 ``` python
