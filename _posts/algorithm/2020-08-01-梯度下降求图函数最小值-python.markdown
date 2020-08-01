@@ -1,0 +1,99 @@
+---
+layout: post
+title: "梯度下降求凸函数最小值"
+date: 2020-08-01 14:30
+categories: algorithm
+---
+
+leetcode题目链接：https://leetcode-cn.com/problems/best-position-for-a-service-centre/
+
+题解：可以三分或者梯度下降，三分的注意精度就好了，这里就不写三分了。官方题解![gradient-descent-min](/images/gradient-descent-min.png.png)
+
+
+``` python
+class Solution:
+    def getMinDistSum(self, positions: List[List[int]]) -> float:
+        # 精度
+        eps = 1e-7
+        # 学习率
+        alpha = 1.0
+        # 学习率衰减，避免在最优解附近震荡
+        decay = 1e-3
+
+        n = len(positions)
+
+        # 初始坐标
+        x = sum(pos[0] for pos in positions) / n
+        y = sum(pos[1] for pos in positions) / n
+
+        # 计算当前服务中心 (xc, yc) 到客户的欧几里得距离之和
+        getDist = lambda xc, yc: sum(((x - xc) ** 2 + (y - yc) ** 2) ** 0.5 for x, y in positions)
+
+        # 计算梯度
+        getGradient = lambda xc, yc: (sum((xc - x) / (((x - xc) ** 2 + (y - yc) ** 2) ** 0.5 + eps) for x, y in positions), sum((yc - y) / (((x - xc) ** 2 + (y - yc) ** 2) ** 0.5 + eps) for x, y in positions))
+
+        while True:
+            xPrev, yPrev = x, y
+            dx, dy = getGradient(x, y)
+
+            x -= alpha * dx
+            y -= alpha * dy
+
+            # 每一轮迭代后，将学习率进行衰减
+            alpha *= (1.0 - decay)
+
+            # 判断是否结束迭代
+            if ((x - xPrev) ** 2 + (y - yPrev) ** 2) ** 0.5 < eps:
+                break
+
+        return getDist(x, y)
+
+```
+
+
+#### 考虑小批量梯度下降，实际上这里小批量梯度下降反而会慢一些
+
+``` python
+class Solution:
+    def getMinDistSum(self, positions: List[List[int]]) -> float:
+        eps = 1e-7
+        alpha = 1.0
+        decay = 1e-3
+
+        n = len(positions)
+        # 调整批大小
+        batchSize = (n / 2) + 1
+
+        x = sum(pos[0] for pos in positions) / n
+        y = sum(pos[1] for pos in positions) / n
+        
+        # 计算服务中心 (xc, yc) 到客户的欧几里得距离之和
+        getDist = lambda xc, yc: sum(((x - xc) ** 2 + (y - yc) ** 2) ** 0.5 for x, y in positions)
+        
+        while True:
+            # 将数据随机打乱
+            random.shuffle(positions)
+            xPrev, yPrev = x, y
+
+            for i in range(0, n, batchSize):
+                j = min(i + batchSize, n)
+                dx, dy = 0.0, 0.0
+
+                # 计算导数，注意处理分母为零的情况
+                for k in range(i, j):
+                    pos = positions[k]
+                    dx += (x - pos[0]) / (sqrt((x - pos[0]) * (x - pos[0]) + (y - pos[1]) * (y - pos[1])) + eps)
+                    dy += (y - pos[1]) / (sqrt((x - pos[0]) * (x - pos[0]) + (y - pos[1]) * (y - pos[1])) + eps)
+                
+                x -= alpha * dx
+                y -= alpha * dy
+
+                # 每一轮迭代后，将学习率进行衰减
+                alpha *= (1.0 - decay)
+            
+            # 判断是否结束迭代
+            if ((x - xPrev) ** 2 + (y - yPrev) ** 2) ** 0.5 < eps:
+                break
+
+        return getDist(x, y)
+```
