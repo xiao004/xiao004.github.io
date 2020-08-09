@@ -1,0 +1,33 @@
+---
+layout: post
+title: "sg函数-go"
+date: 2020-08-01 14:30
+categories: algorithm
+---
+
+关于sg函数的理解可以参考这篇blog: https://blog.csdn.net/bestsort/article/details/88197959
+
+``` go
+func getSg(n int) int {
+    if sg[n] != -1 {
+        return sg[n]
+    }
+    tag := make(map[int]int)
+    for i := 0; i < len(f); i++ {
+        if n >= f[i] {
+            getSg(n - f[i])
+            tag[sg[n - f[i]]] = 1
+        }
+    }
+    for i := 0; ; i++ {
+        if tag[i] == 0 {
+            sg[n] = i
+            return i
+        }
+    }
+    return 0
+}
+
+var f []int // 每轮游戏中可以取的值
+var sg []int // 元素值需要初始化为-1
+```
